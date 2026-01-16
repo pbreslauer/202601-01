@@ -3,58 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bus Tracker</title>
+    <title>49 GPS Tracker</title>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
-        .bus-row { 
-            border: 1px solid #333; margin: 10px 0; padding: 15px; border-radius: 10px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .route-id { font-size: 1.5rem; font-weight: bold; color: #888; }
-        .eta { font-size: 2.5rem; font-weight: 800; color: #00FF41; }
-        .dir { font-size: 0.8rem; color: #555; text-transform: uppercase; }
+        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .bus-card { border: 1px solid #333; margin: 10px; padding: 20px; border-radius: 15px; background: #111; }
+        .eta { font-size: 4rem; font-weight: bold; color: #00FF41; }
+        .label { color: #555; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+        .dest { font-size: 1.1rem; margin-bottom: 5px; color: #aaa; }
     </style>
 </head>
 <body>
-    <h3>21st & Wallace</h3>
-    <div id="busList">Loading all arrivals...</div>
-    <div id="status" style="margin-top:20px; color:#444; font-size:0.8rem;"></div>
+    <div class="label">Route 49 Southbound</div>
+    <div id="display">Scanning GPS...</div>
+    <div id="lastUpdate" style="margin-top:20px; color:#333; font-size:0.7rem;"></div>
 
     <script>
-        async function fetchAll() {
+        async function getGPS() {
+            const display = document.getElementById('display');
             try {
-                const STOP_ID = '21102';
-                const url = `https://www3.septa.org/api/Arrivals/index.php?stop_id=${STOP_ID}&results=5`;
-                const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-                const data = await response.json();
+                // TransitView shows every bus currently on the route
+                const url = `https://www3.septa.org/api/TransitView/index.php?route=49`;
+                const resp = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+                const data = await resp.json();
                 
-                const stopKey = Object.keys(data)[0];
-                const arrivals = data[stopKey];
-                const listDiv = document.getElementById('busList');
-                listDiv.innerHTML = ""; // Clear current list
+                if (!data || !data.bus || data.bus.length === 0) {
+                    display.innerHTML = "<div class='bus-card'>No active buses found on GPS</div>";
+                    return;
+                }
 
-                if (Array.isArray(arrivals)) {
-                    arrivals.forEach(bus => {
-                        listDiv.innerHTML += `
-                            <div class="bus-row">
-                                <div style="text-align:left">
-                                    <div class="route-id">Bus ${bus.route}</div>
-                                    <div class="dir">${bus.destination}</div>
-                                </div>
-                                <div class="eta">${bus.arrival_at}<span style="font-size:1rem">m</span></div>
+                // We filter for Southbound buses
+                const southboundBuses = data.bus.filter(b => b.Direction === "Southbound");
+                
+                if (southboundBuses.length === 0) {
+                    display.innerHTML = "<div class='bus-card'>No Southbound buses detected</div>";
+                } else {
+                    display.innerHTML = "";
+                    southboundBuses.forEach(bus => {
+                        display.innerHTML += `
+                            <div class="bus-card">
+                                <div class="dest">To: ${bus.destination}</div>
+                                <div class="eta">${bus.Offset}<span style="font-size:1rem">m ago</span></div>
+                                <div class="label">Last reported</div>
                             </div>`;
                     });
-                    document.getElementById('status').innerText = "Updated: " + new Date().toLocaleTimeString();
-                } else {
-                    listDiv.innerHTML = "No active buses found in SEPTA feed.";
                 }
-            } catch (err) {
-                document.getElementById('busList').innerHTML = "Connection Error. Retrying...";
+                document.getElementById('lastUpdate').innerText = "Updated: " + new Date().toLocaleTimeString();
+            } catch (e) {
+                display.innerHTML = "Connection Error";
             }
         }
 
-        fetchAll();
-        setInterval(fetchAll, 30000);
+        getGPS();
+        setInterval(getGPS, 30000);
     </script>
 </body>
 </html>
