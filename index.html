@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dashboard</title>
+    <style>
+        body { 
+            background-color: #000; color: #fff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden;
+        }
+        .container { text-align: center; }
+        .route { font-size: 1.5rem; color: #888; margin-bottom: 5px; }
+        .stop { font-size: 1rem; color: #555; margin-bottom: 20px; text-transform: uppercase; }
+        .time { font-size: 5rem; font-weight: 800; color: #00FF41; line-height: 1; }
+        .min { font-size: 1.5rem; color: #00FF41; }
+        .status { margin-top: 20px; font-size: 0.7rem; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="route">BUS <span id="routeNum">--</span></div>
+        <div id="stopName" class="stop">Locating...</div>
+        <div class="time" id="eta">--</div>
+        <div class="min">MINUTES</div>
+        <div class="status" id="lastUpdated">Updating...</div>
+    </div>
+
+    <script>
+        // CONFIGURATION: Set your specific stop and bus here
+        const STOP_ID = '21102'; // 21st St & Wallace St
+        const ROUTE_ID = '49';
+
+        async function fetchSepta() {
+            try {
+                // We use a CORS proxy because SEPTA's server often blocks direct browser requests
+                const url = `https://www3.septa.org/api/Arrivals/index.php?stop_id=${STOP_ID}&results=3`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                
+                const response = await fetch(proxyUrl);
+                const outerData = await response.json();
+                const data = JSON.parse(outerData.contents);
+                
+                const stopName = Object.keys(data)[0];
+                const arrivals = data[stopName];
+                const myBus = arrivals.find(bus => bus.route === ROUTE_ID);
+
+                if (myBus) {
+                    document.getElementById('stopName').innerText = stopName;
+                    document.getElementById('routeNum').innerText = ROUTE_ID;
+                    document.getElementById('eta').innerText = myBus.arrival_at;
+                    document.getElementById('lastUpdated').innerText = "LIVE • " + new Date().toLocaleTimeString();
+                } else {
+                    document.getElementById('eta').innerText = "N/A";
+                }
+            } catch (err) {
+                document.getElementById('lastUpdated').innerText = "Connection Error";
+            }
+        }
+
+        setInterval(fetchSepta, 30000);
+        fetchSepta();
+    </script>
+</body>
+</html>
