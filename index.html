@@ -2,59 +2,84 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>49 GPS Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>49 Bus Tracker</title>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; padding-top: 50px; }
-        .bus-card { border: 1px solid #333; margin: 10px; padding: 20px; border-radius: 15px; background: #111; }
-        .eta { font-size: 4rem; font-weight: bold; color: #00FF41; }
-        .label { color: #555; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
-        .dest { font-size: 1.1rem; margin-bottom: 5px; color: #aaa; }
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        .container { text-align: center; width: 100%; }
+        .route-label { font-size: 1.2rem; color: #666; text-transform: uppercase; letter-spacing: 2px; }
+        .eta-number { font-size: 10rem; font-weight: 900; color: #00FF41; line-height: 0.9; margin: 10px 0; }
+        .unit { font-size: 1.5rem; color: #00FF41; font-weight: bold; }
+        .footer { margin-top: 30px; font-size: 0.8rem; color: #333; }
+        #status-msg { color: #888; font-style: italic; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div class="label">Route 49 Southbound</div>
-    <div id="display">Scanning GPS...</div>
-    <div id="lastUpdate" style="margin-top:20px; color:#333; font-size:0.7rem;"></div>
+    <div class="container" onclick="updateTracker()">
+        <div class="route-label">49 Southbound</div>
+        <div id="stop-display" style="color:#444; font-size:0.9rem;">21st & Wallace</div>
+        
+        <div id="eta-container">
+            <div class="eta-number" id="eta">--</div>
+            <div class="unit" id="unit-label">MINUTES</div>
+        </div>
+
+        <div id="status-msg">Connecting to SEPTA...</div>
+        <div class="footer">Tap screen to refresh • <span id="last-update">--</span></div>
+    </div>
 
     <script>
-        async function getGPS() {
-            const display = document.getElementById('display');
+        const STOP_ID = '21102';
+        const ROUTE_ID = '49';
+
+        async function updateTracker() {
+            const etaDisp = document.getElementById('eta');
+            const statusDisp = document.getElementById('status-msg');
+            const timeDisp = document.getElementById('last-update');
+
             try {
-                // TransitView shows every bus currently on the route
-                const url = `https://www3.septa.org/api/TransitView/index.php?route=49`;
-                const resp = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-                const data = await resp.json();
+                // Using a reliable proxy to bypass CORS
+                const url = `https://www3.septa.org/api/Arrivals/index.php?stop_id=${STOP_ID}&results=3`;
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
                 
-                if (!data || !data.bus || data.bus.length === 0) {
-                    display.innerHTML = "<div class='bus-card'>No active buses found on GPS</div>";
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                
+                // Get the arrivals list (the key is the stop name)
+                const stopName = Object.keys(data)[0];
+                const arrivals = data[stopName];
+
+                // If 'arrivals' is a string, it means "No service" or "No buses found"
+                if (!Array.isArray(arrivals)) {
+                    etaDisp.innerText = "--";
+                    statusDisp.innerText = "No buses currently detected";
                     return;
                 }
 
-                // We filter for Southbound buses
-                const southboundBuses = data.bus.filter(b => b.Direction === "Southbound");
-                
-                if (southboundBuses.length === 0) {
-                    display.innerHTML = "<div class='bus-card'>No Southbound buses detected</div>";
+                // Find the first 49 bus (Arrivals API already sorts by time)
+                const nextBus = arrivals.find(bus => bus.route === ROUTE_ID);
+
+                if (nextBus) {
+                    etaDisp.innerText = nextBus.arrival_at;
+                    statusDisp.innerText = "Next bus to 29th-Snyder";
+                    etaDisp.style.color = "#00FF41";
                 } else {
-                    display.innerHTML = "";
-                    southboundBuses.forEach(bus => {
-                        display.innerHTML += `
-                            <div class="bus-card">
-                                <div class="dest">To: ${bus.destination}</div>
-                                <div class="eta">${bus.Offset}<span style="font-size:1rem">m ago</span></div>
-                                <div class="label">Last reported</div>
-                            </div>`;
-                    });
+                    etaDisp.innerText = "OFF";
+                    statusDisp.innerText = "49 not in next 3 arrivals";
+                    etaDisp.style.color = "#ff4444";
                 }
-                document.getElementById('lastUpdate').innerText = "Updated: " + new Date().toLocaleTimeString();
-            } catch (e) {
-                display.innerHTML = "Connection Error";
+                
+                timeDisp.innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            } catch (err) {
+                statusDisp.innerText = "Connection Lost";
+                console.error(err);
             }
         }
 
-        getGPS();
-        setInterval(getGPS, 30000);
+        // Run immediately and then every 30 seconds
+        updateTracker();
+        setInterval(updateTracker, 30000);
     </script>
 </body>
 </html>
