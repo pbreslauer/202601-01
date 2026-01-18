@@ -29,57 +29,60 @@
     </div>
 
     <script>
-        const STOP_ID = '21102';
-        const ROUTE_ID = '49';
+    const STOP_ID = '21102';
+    const ROUTE_ID = '49';
 
-        async function updateTracker() {
-            const etaDisp = document.getElementById('eta');
-            const statusDisp = document.getElementById('status-msg');
-            const timeDisp = document.getElementById('last-update');
+    async function updateTracker() {
+        const etaDisp = document.getElementById('eta');
+        const statusDisp = document.getElementById('status-msg');
+        const timeDisp = document.getElementById('last-update');
 
-            try {
-                // Using a reliable proxy to bypass CORS
-                const url = `https://www3.septa.org/api/Arrivals/index.php?stop_id=${STOP_ID}&results=3`;
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-                
-                const response = await fetch(proxyUrl);
-                const data = await response.json();
-                
-                // Get the arrivals list (the key is the stop name)
-                const stopName = Object.keys(data)[0];
-                const arrivals = data[stopName];
+        try {
+            // Switching to the BusSchedules API - usually more stable for specific stops
+            const url = `https://www3.septa.org/api/BusSchedules/index.php?stop_id=${STOP_ID}`;
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            
+            const response = await fetch(proxyUrl);
+            const data = await response.json();
+            
+            // BusSchedules returns an object where keys are route numbers
+            const routeData = data[ROUTE_ID];
 
-                // If 'arrivals' is a string, it means "No service" or "No buses found"
-                if (!Array.isArray(arrivals)) {
-                    etaDisp.innerText = "--";
-                    statusDisp.innerText = "No buses currently detected";
-                    return;
-                }
-
-                // Find the first 49 bus (Arrivals API already sorts by time)
-                const nextBus = arrivals.find(bus => bus.route === ROUTE_ID);
-
-                if (nextBus) {
-                    etaDisp.innerText = nextBus.arrival_at;
-                    statusDisp.innerText = "Next bus to 29th-Snyder";
-                    etaDisp.style.color = "#00FF41";
-                } else {
-                    etaDisp.innerText = "OFF";
-                    statusDisp.innerText = "49 not in next 3 arrivals";
-                    etaDisp.style.color = "#ff4444";
-                }
-                
-                timeDisp.innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
-            } catch (err) {
-                statusDisp.innerText = "Connection Lost";
-                console.error(err);
+            if (!routeData || routeData.length === 0) {
+                etaDisp.innerText = "--";
+                statusDisp.innerText = "No upcoming 49 buses found";
+                return;
             }
-        }
 
-        // Run immediately and then every 30 seconds
-        updateTracker();
-        setInterval(updateTracker, 30000);
-    </script>
+            // The first entry is the next bus
+            const nextBus = routeData[0];
+            
+            // date = scheduled time, DateCalendar = real-time predicted time
+            // We calculate the difference in minutes
+            const now = new Date();
+            const arrivalTime = new Date(nextBus.DateCalendar);
+            const diffMs = arrivalTime - now;
+            const diffMins = Math.round(diffMs / 60000);
+
+            if (diffMins >= 0) {
+                etaDisp.innerText = diffMins;
+                statusDisp.innerText = `To ${nextBus.Destination}`;
+                etaDisp.style.color = "#00FF41";
+            } else {
+                etaDisp.innerText = "0";
+                statusDisp.innerText = "Arriving now";
+            }
+            
+            timeDisp.innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        } catch (err) {
+            statusDisp.innerText = "Check Connection";
+            console.error("Fetch error:", err);
+        }
+    }
+
+    updateTracker();
+    setInterval(updateTracker, 30000);
+</script>
 </body>
 </html>
