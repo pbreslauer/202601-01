@@ -28,7 +28,7 @@
         <div class="footer">Tap screen to refresh • <span id="last-update">--</span></div>
     </div>
 
-    <script>
+   <script>
     const STOP_ID = '21102';
     const ROUTE_ID = '49';
 
@@ -38,39 +38,50 @@
         const timeDisp = document.getElementById('last-update');
 
         try {
-            // Switching to the BusSchedules API - usually more stable for specific stops
+            // BusSchedules is usually the "Source of Truth" for stops
             const url = `https://www3.septa.org/api/BusSchedules/index.php?stop_id=${STOP_ID}`;
             const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
             
             const response = await fetch(proxyUrl);
             const data = await response.json();
             
-            // BusSchedules returns an object where keys are route numbers
-            const routeData = data[ROUTE_ID];
+            // LOGIC CHANGE: Some SEPTA APIs return keys as "49" and some as "Route 49"
+            // We search all keys for one that contains "49"
+            let busList = [];
+            const keys = Object.keys(data);
+            
+            const matchKey = keys.find(k => k.includes(ROUTE_ID));
+            if (matchKey) {
+                busList = data[matchKey];
+            }
 
-            if (!routeData || routeData.length === 0) {
+            if (!busList || busList.length === 0) {
                 etaDisp.innerText = "--";
                 statusDisp.innerText = "No upcoming 49 buses found";
+                // DEBUG: Show what keys we DID find
+                console.log("Available routes at this stop:", keys);
                 return;
             }
 
-            // The first entry is the next bus
-            const nextBus = routeData[0];
+            // The API returns the next several buses
+            const nextBus = busList[0];
             
-            // date = scheduled time, DateCalendar = real-time predicted time
-            // We calculate the difference in minutes
-            const now = new Date();
+            // DateCalendar is the real-time predicted arrival
             const arrivalTime = new Date(nextBus.DateCalendar);
+            const now = new Date();
+            
+            // Calculate difference
             const diffMs = arrivalTime - now;
-            const diffMins = Math.round(diffMs / 60000);
+            const diffMins = Math.floor(diffMs / 60000);
 
-            if (diffMins >= 0) {
+            if (diffMins <= 0) {
+                etaDisp.innerText = "0";
+                statusDisp.innerText = "Arriving now";
+                etaDisp.style.color = "#FFFF00"; // Yellow for arriving
+            } else {
                 etaDisp.innerText = diffMins;
                 statusDisp.innerText = `To ${nextBus.Destination}`;
                 etaDisp.style.color = "#00FF41";
-            } else {
-                etaDisp.innerText = "0";
-                statusDisp.innerText = "Arriving now";
             }
             
             timeDisp.innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
