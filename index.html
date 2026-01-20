@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>49 Bus Tracker</title>
+    <title>30th St Tracker</title>
     <style>
         body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
         .container { text-align: center; width: 100%; }
@@ -16,84 +16,81 @@
 </head>
 <body>
     <div class="container" onclick="updateTracker()">
-        <div class="route-label">49 Southbound</div>
-        <div id="stop-display" style="color:#444; font-size:0.9rem;">21st & Wallace</div>
+        <div class="route-label" id="route-name">Route 49</div>
+        <div id="stop-display" style="color:#444; font-size:0.9rem;">30th St Station (Stop 3030)</div>
         
         <div id="eta-container">
             <div class="eta-number" id="eta">--</div>
             <div class="unit" id="unit-label">MINUTES</div>
         </div>
 
-        <div id="status-msg">Connecting to SEPTA...</div>
-        <div class="footer">Tap screen to refresh • <span id="last-update">--</span></div>
+        <div id="status-msg">Scanning Hub...</div>
+        <div class="footer">Tap to refresh • <span id="last-update">--</span></div>
     </div>
 
-   <script>
-    const STOP_ID = '21102';
-    const ROUTE_ID = '49';
+    <script>
+        const STOP_ID = '3030';
+        const TARGET_ROUTE = '49';
 
-    async function updateTracker() {
-        const etaDisp = document.getElementById('eta');
-        const statusDisp = document.getElementById('status-msg');
-        const timeDisp = document.getElementById('last-update');
+        async function updateTracker() {
+            const etaDisp = document.getElementById('eta');
+            const statusDisp = document.getElementById('status-msg');
+            const routeDisp = document.getElementById('route-name');
+            const timeDisp = document.getElementById('last-update');
 
-        try {
-            // BusSchedules is usually the "Source of Truth" for stops
-            const url = `https://www3.septa.org/api/BusSchedules/index.php?stop_id=${STOP_ID}`;
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-            
-            const response = await fetch(proxyUrl);
-            const data = await response.json();
-            
-            // LOGIC CHANGE: Some SEPTA APIs return keys as "49" and some as "Route 49"
-            // We search all keys for one that contains "49"
-            let busList = [];
-            const keys = Object.keys(data);
-            
-            const matchKey = keys.find(k => k.includes(ROUTE_ID));
-            if (matchKey) {
-                busList = data[matchKey];
+            try {
+                const url = `https://www3.septa.org/api/BusSchedules/index.php?stop_id=${STOP_ID}`;
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                const keys = Object.keys(data);
+
+                if (keys.length === 0) {
+                    etaDisp.innerText = "--";
+                    statusDisp.innerText = "No buses at this hub";
+                    return;
+                }
+
+                // 1. Try to find the 49 specifically
+                let bus = null;
+                const matchKey = keys.find(k => k.includes(TARGET_ROUTE));
+                
+                if (matchKey && data[matchKey].length > 0) {
+                    bus = data[matchKey][0];
+                    routeDisp.innerText = "Route 49";
+                } else {
+                    // 2. FALLBACK: If no 49, show the absolute next bus of ANY route
+                    const firstRouteKey = keys[0];
+                    bus = data[firstRouteKey][0];
+                    routeDisp.innerText = `Next: Route ${firstRouteKey}`;
+                }
+
+                // Calculate Minutes
+                const arrivalTime = new Date(bus.DateCalendar);
+                const now = new Date();
+                const diffMins = Math.floor((arrivalTime - now) / 60000);
+
+                if (diffMins <= 0) {
+                    etaDisp.innerText = "0";
+                    statusDisp.innerText = "Arriving now";
+                    etaDisp.style.color = "#FFFF00";
+                } else {
+                    etaDisp.innerText = diffMins;
+                    statusDisp.innerText = `To ${bus.Destination}`;
+                    etaDisp.style.color = "#00FF41";
+                }
+                
+                timeDisp.innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            } catch (err) {
+                statusDisp.innerText = "Connection Error";
+                console.error(err);
             }
-
-            if (!busList || busList.length === 0) {
-                etaDisp.innerText = "--";
-                statusDisp.innerText = "No upcoming 49 buses found";
-                // DEBUG: Show what keys we DID find
-                console.log("Available routes at this stop:", keys);
-                return;
-            }
-
-            // The API returns the next several buses
-            const nextBus = busList[0];
-            
-            // DateCalendar is the real-time predicted arrival
-            const arrivalTime = new Date(nextBus.DateCalendar);
-            const now = new Date();
-            
-            // Calculate difference
-            const diffMs = arrivalTime - now;
-            const diffMins = Math.floor(diffMs / 60000);
-
-            if (diffMins <= 0) {
-                etaDisp.innerText = "0";
-                statusDisp.innerText = "Arriving now";
-                etaDisp.style.color = "#FFFF00"; // Yellow for arriving
-            } else {
-                etaDisp.innerText = diffMins;
-                statusDisp.innerText = `To ${nextBus.Destination}`;
-                etaDisp.style.color = "#00FF41";
-            }
-            
-            timeDisp.innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
-        } catch (err) {
-            statusDisp.innerText = "Check Connection";
-            console.error("Fetch error:", err);
         }
-    }
 
-    updateTracker();
-    setInterval(updateTracker, 30000);
-</script>
+        updateTracker();
+        setInterval(updateTracker, 30000);
+    </script>
 </body>
 </html>
